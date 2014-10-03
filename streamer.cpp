@@ -1,9 +1,5 @@
 /****************************************************************************
 **
-** QtMEL is a Qt Media Encoding Library that allows to encode video and audio streams
-** Copyright (C) 2013 Kirill Bukaev(aka KIBSOFT).
-** Contact: Kirill Bukaev (support@kibsoft.ru)
-**
 ** This library is free software; you can redistribute it and/or
 ** modify it under the terms of the GNU Lesser General Public
 ** License as published by the Free Software Foundation; either
@@ -172,7 +168,6 @@ void Streamer::mute()
     if (m_audioGrabber) {
         m_muted = true;
         disconnectAudioGrabber();
-        m_startMuteTime = m_audioGrabber->elapsedMilliseconds();
     }
 }
 
@@ -180,11 +175,6 @@ void Streamer::unmute()
 {
     if (m_audioGrabber) {
         m_muted = false;
-        if (m_startMuteTime != -1) {
-            int muteTime = m_audioGrabber->elapsedMilliseconds() - m_startMuteTime;
-            encodeSilence(muteTime);
-        }
-
         connectAudioGrabber();
     }
 }

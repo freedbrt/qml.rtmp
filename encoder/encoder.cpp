@@ -371,7 +371,7 @@ void EncoderPrivate::stop()
 
 void EncoderPrivate::encodeVideoFrame(const QImage &frame, int pts)
 {
-    if (pts) { // if pts is -1(fixed fps) or greater than 0
+    if (pts && !frame.isNull()) { // if pts is -1(fixed fps) or greater than 0
         if (convertImage(frame)) {
             int outSize = avcodec_encode_video(m_videoCodecContext, m_videoBuffer, m_videoBufferSize, m_videoPicture);
 
@@ -456,6 +456,7 @@ void EncoderPrivate::encodeAudioData(const QByteArray &data, int pts)
 
             QMutexLocker locker(&m_encodedAudioDataSizeMutex);
             m_encodedAudioDataSize += m_audioSampleSize;
+
             av_free_packet(&pkt);
         }
 
@@ -604,8 +605,8 @@ bool EncoderPrivate::createAudioStream()
     m_audioCodecContext->codec_id = codec_id;
     m_audioCodecContext->codec_type = AVMEDIA_TYPE_AUDIO;
 
-    m_audioStream->time_base = (AVRational){ 1, fixedFrameRate() };
-    m_audioCodecContext->time_base = (AVRational){ 1, fixedFrameRate() };
+//    m_audioStream->time_base = (AVRational){ 1, fixedFrameRate() * 2 };
+//    m_audioCodecContext->time_base = (AVRational){ 1, fixedFrameRate() * 2 };
 
     applyAudioCodecSettings();
 
@@ -986,6 +987,8 @@ void Encoder::setError(Encoder::Error errorCode, const QString &errorString)
 {
     m_error = errorCode;
     m_errorString = errorString;
+
+    qDebug() << errorString << "code " << errorCode;
 
     Q_EMIT error(errorCode);
 }

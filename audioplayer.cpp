@@ -38,10 +38,9 @@ int dataCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFram
 
     AudioPlayer *player = static_cast<AudioPlayer *>(data);
 
-    QByteArray array = player->readData(nBufferFrames * 2);
+    QByteArray array = player->readData( streamTime, nBufferFrames * 2 );
     if (array.isEmpty()) {
-        memset(outputBuffer, '\0', nBufferFrames * 2);
-        return nBufferFrames * 2;
+        return 0;
     }
 
     memcpy(outputBuffer, array.data(), array.size());
@@ -50,6 +49,7 @@ int dataCallback(void *outputBuffer, void *inputBuffer, unsigned int nBufferFram
 
 AudioPlayer::AudioPlayer(QObject *parent)
     : AbstractGrabber(parent)
+    , m_rtAudio(0)
     , m_deviceIndex(-1)
 {
     init();
@@ -57,6 +57,8 @@ AudioPlayer::AudioPlayer(QObject *parent)
 
 AudioPlayer::~AudioPlayer()
 {
+    if (this->m_rtAudio)
+        this->m_rtAudio->stopStream();
     cleanup();
 }
 
@@ -114,30 +116,51 @@ QHash<int, QString> AudioPlayer::availableDevices()
     return devices;
 }
 
-void AudioPlayer::writeData(const QByteArray &newArray)
+void AudioPlayer::writeData(double pts, const QByteArray &newArray)
 {
     if (state() != AbstractGrabber::ActiveState)
         return;
 
     QMutexLocker locker(&this->_mutex);
-    qDebug() << "write" << newArray.size() << "size" << this->_audioData.size();
+//    qDebug() << "write" << newArray.size() << "size" << this->_audioData.size();
 
-    this->_audioData += newArray;
+//    if (this->_audioData.size() > newArray.size() * 4) {
+//        //m_rtAudio->stopStream();
+//       // m_rtAudio->setStreamTime( m_rtAudio->getStreamTime() + 1.0f );
+//        //m_rtAudio->startStream();
+
+//        //this->_audioData.remove(0, this->_audioData.size() - newArray.size() * 4);
+//    }
+
+    this->_audioDataList.append(qMakePair<double, QByteArray>(pts, newArray));
+
+//    this->_audioData += newArray;
 }
 
-QByteArray AudioPlayer::readData(int num)
-{
-//    qDebug() << this->_audioData.size();
 
+QByteArray AudioPlayer::readData(double pts, int num)
+{
     QMutexLocker locker(&this->_mutex);
-    if (this->_audioData.isEmpty() || this->_audioData.size() < num || state() != AbstractGrabber::ActiveState) {
-        return QByteArray();
-    }
 
     QByteArray ret;
-    ret.resize(num);
-    memcpy(ret.data(), this->_audioData.data(), num);
-    this->_audioData.remove(0, num);
+
+    double delay = 0.2;
+
+    while (!this->_audioDataList.isEmpty()) {
+        QPair<double, QByteArray> value = this->_audioDataList.takeFirst();
+
+        if (value.first < pts - delay) {
+            continue;
+        }
+
+        ret += value.second;
+        if (ret.size() >= num)
+            break;
+    }
+
+    if (ret.isEmpty()) {
+        ret.fill('\0', num);
+    }
     return ret;
 }
 
@@ -162,21 +185,15 @@ bool AudioPlayer::start()
             return false;
         }
 
-    #ifdef Q_OS_WIN32
-        m_rtAudio = new RtAudio(RtAudio::WINDOWS_DS);
-    #endif
-
-    #ifdef Q_OS_LINUX
-        m_rtAudio = new RtAudio(RtAudio::LINUX_ALSA);
-    #endif
+        m_rtAudio = new RtAudio();
 
         RtAudio::StreamParameters params;
         RtAudio::StreamOptions options;
-        options.flags = RTAUDIO_SCHEDULE_REALTIME | RTAUDIO_MINIMIZE_LATENCY;
-        options.numberOfBuffers = 1;
-        options.priority = 8;
+        //options.flags = RTAUDIO_SCHEDULE_REALTIME | RTAUDIO_MINIMIZE_LATENCY;
+        //options.numberOfBuffers = 1;
+        //options.priority = 8;
 
-        unsigned int bufferFrames = 1024;
+        unsigned int bufferFrames = 2304;
 
         params.deviceId = deviceIndex();
         params.nChannels = format().channelCount();

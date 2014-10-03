@@ -109,8 +109,8 @@ public:
     */
     static QHash<int /*id*/, QString /*name*/> availableDevices();
 
-    void writeData(const QByteArray& newArray);
-    QByteArray readData(int num);
+    void writeData(double pts, const QByteArray& newArray);
+    QByteArray readData(double pts, int num);
     QByteArray readAll();
 
     int defaultAudioDeviceIndex() const;
@@ -134,6 +134,8 @@ private:
     RtAudio *m_rtAudio;
     QMutex _mutex;
     QByteArray _audioData;
+
+    QList<QPair<double, QByteArray> > _audioDataList;
 };
 
 #endif // AUDIOPLAYER_H

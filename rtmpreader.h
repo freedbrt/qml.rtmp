@@ -40,6 +40,7 @@ class RTMPReaderPrivate: public QObject
 
 public:
     explicit RTMPReaderPrivate(QObject* parent = 0);
+    virtual ~RTMPReaderPrivate();
 
 public Q_SLOTS:
     Q_INVOKABLE void start(QString url);
@@ -56,6 +57,8 @@ public Q_SLOTS:
     */
     bool isStopRequest() const;
 
+    bool isRunning() const;
+
     void mute();
     void unmute();
 
@@ -66,6 +69,7 @@ private:
     bool _isStopped;
     QMutex _stopPauseMutex;
     AudioPlayer player;
+    bool _isRunning;
 };
 
 class RTMPReader : public QQuickPaintedItem

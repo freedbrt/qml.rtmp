@@ -41,7 +41,7 @@ AudioCodecSettings audioCodecSettings(AudioGrabber* audioGrabber)
     settings.setSampleRate(44100);
     settings.setChannelCount(1);
     settings.setSampleFormat(EncoderGlobal::SAMPLE_FMT_S16P);
-    settings.setBitrate(192000);
+    settings.setBitrate(128000);
 
     return settings;
 }
@@ -50,11 +50,11 @@ VideoCodecSettings videoCodecSettingsLosslessStreaming()
 {
     //x264 loseless fast preset
     VideoCodecSettings settings;
-//    settings.setBitrate(8192);
+    settings.setBitrate(32000);
     settings.setCoderType(EncoderGlobal::Vlc);
     settings.setFlags(EncoderGlobal::GlobalHeader);
     settings.setMotionEstimationComparison(4);
-    settings.setPartitions(EncoderGlobal::I8x8 | EncoderGlobal::P4x4);
+//    settings.setPartitions(EncoderGlobal::I4x4);
 //    settings.setSubpixelMotionEstimationQuality(5);
 //    settings.setMotionEstimationRange(16);
 //    settings.setGopSize(80);
@@ -80,8 +80,8 @@ RTMPSender::RTMPSender(QQuickItem *parent):
      setFlag(ItemHasContents, true);
 
      camera = new CameraGrabber(this);
-     camera->setDeviceIndex(1);
-     camera->setLatency(5);
+     camera->setDeviceIndex(0);
+     camera->setLatency(50);
 
      AudioFormat format;
      format.setChannelCount(1);

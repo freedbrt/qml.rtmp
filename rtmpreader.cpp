@@ -36,10 +36,12 @@ extern "C" {
 #include <QBuffer>
 #include <QMutexLocker>
 #include <QAudioFormat>
+#include <QElapsedTimer>
 
 RTMPReaderPrivate::RTMPReaderPrivate(QObject* parent)
     : QObject(parent)
     , _isStopped(false)
+    , _isRunning(false)
 {
     AudioFormat rtFormat;
     rtFormat.setChannelCount(1);
@@ -58,12 +60,21 @@ RTMPReaderPrivate::RTMPReaderPrivate(QObject* parent)
 //    format.setSampleType(QAudioFormat::SignedInt);
 
 //    audioOutput = new QAudioOutput(format, this);
-//    audioOutput->setBufferSize(65536 * 8);
+    //    audioOutput->setBufferSize(65536 * 8);
+}
+
+RTMPReaderPrivate::~RTMPReaderPrivate()
+{
+    this->setStopRequest(true);
 }
 
 void RTMPReaderPrivate::start(QString url) {
-    this->setStopRequest(false);
+    if (this->_isRunning) {
+        return;
+    }
 
+    this->_isRunning = true;
+    this->setStopRequest(false);
 
     AVFormatContext* context = avformat_alloc_context();
     AVCodecContext  *pCodecCtx;
@@ -72,12 +83,14 @@ void RTMPReaderPrivate::start(QString url) {
 
     QString params = url + " live=1";
     if(avformat_open_input(&context, params.toUtf8().data(), NULL, NULL) != 0){
+        this->_isRunning = false;
         return;
     }
     context->probesize2 = 200000;
     context->max_analyze_duration2 = 200000;
 
     if(avformat_find_stream_info(context, NULL) < 0){
+        this->_isRunning = false;
         return;
     }
 
@@ -114,6 +127,7 @@ void RTMPReaderPrivate::start(QString url) {
         pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
 
         if(avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
+            this->_isRunning = false;
             return;
         }
 
@@ -126,6 +140,7 @@ void RTMPReaderPrivate::start(QString url) {
         audioCodec = avcodec_find_decoder(audioCodecContext->codec_id);
 
         if(avcodec_open2(audioCodecContext, audioCodec, NULL) < 0) {
+            this->_isRunning = false;
             return;
         }
     }
@@ -135,6 +150,8 @@ void RTMPReaderPrivate::start(QString url) {
     int currentPts = 0;
 
     player.start();
+    QElapsedTimer timer;
+    timer.start();
 
     while (res = av_read_frame(context, &packet) >= 0)
     {
@@ -142,15 +159,18 @@ void RTMPReaderPrivate::start(QString url) {
             break;
 
         currentPts = packet.pts;
+        player.setStreamTime((static_cast<double>(packet.pts) / 1000.0f));
 
         if (audio_stream_index != -1 && packet.stream_index == audio_stream_index){
             avcodec_decode_audio4(audioCodecContext, audioFrame, &audioFrameFinished, &packet);
 
             if(audioFrameFinished){
-                QByteArray sample;
-                sample.resize(audioFrame->linesize[0]);
-                memcpy(sample.data(), (char*)audioFrame->extended_data[0], audioFrame->linesize[0]);
-                player.writeData(sample);
+                if (packet.pts >= timer.elapsed() - 1000) {
+                    QByteArray sample;
+                    sample.resize(audioFrame->linesize[0]);
+                    memcpy(sample.data(), (char*)audioFrame->extended_data[0], audioFrame->linesize[0]);
+                    player.writeData(static_cast<double>(packet.pts) / 1000.0f, sample);
+                }
 
                 av_free_packet(&packet);
             }
@@ -200,6 +220,9 @@ void RTMPReaderPrivate::start(QString url) {
     av_free(pFrameRGB);
     av_free(audioFrame);
     avformat_close_input(&context);
+
+    this->_isRunning = false;
+    this->setStopRequest(false);
 }
 
 void RTMPReaderPrivate::setStopRequest(bool stop)
@@ -211,6 +234,11 @@ void RTMPReaderPrivate::setStopRequest(bool stop)
 bool RTMPReaderPrivate::isStopRequest() const
 {
     return this->_isStopped;
+}
+
+bool RTMPReaderPrivate::isRunning() const
+{
+    return this->_isRunning;
 }
 
 void RTMPReaderPrivate::mute()
@@ -243,8 +271,8 @@ RTMPReader::RTMPReader(QQuickItem *parent)
 RTMPReader::~RTMPReader()
 {
     this->_thread->terminate();
-    delete this->d_ptr;
-    this->d_ptr = 0;
+//    delete this->d_ptr;
+//    this->d_ptr = 0;
 }
 
 void RTMPReader::paint(QPainter *painter)
@@ -288,7 +316,8 @@ void RTMPReader::start(QString url)
         return;
     }
 
-    QMetaObject::invokeMethod(d_ptr, "start", Qt::QueuedConnection, Q_ARG(QString, this->url()));
+    if (!d_ptr->isRunning())
+        QMetaObject::invokeMethod(d_ptr, "start", Qt::QueuedConnection, Q_ARG(QString, this->url()));
 }
 
 void RTMPReader::stop()
