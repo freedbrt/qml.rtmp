@@ -1,6 +1,6 @@
 TEMPLATE = lib
 TARGET = qml.rtmp
-QT += qml core gui quick declarative multimedia multimediawidgets
+QT += qml core gui quick multimedia multimediawidgets
 CONFIG += qt plugin
 
 DESTDIR = lib
